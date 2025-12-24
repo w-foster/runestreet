@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 
-type VolumeMode = "absolute" | "relative_to_baseline";
+type VolumeMode = "absolute" | "relative_to_baseline" | "daily_pct";
 
 type ScanRequest = {
   baseline_hours: number;
@@ -10,11 +10,15 @@ type ScanRequest = {
   volume_mode: VolumeMode;
   min_event_volume: number;
   volume_multiplier: number;
+  min_event_daily_pct: number;
   still_low_pct: number;
   min_buy_limit?: number;
   max_buy_limit?: number;
   min_price?: number;
   max_price?: number;
+  min_daily_volume_24h?: number;
+  max_daily_volume_24h?: number;
+  sort_by: "biggest_drop" | "most_recent" | "biggest_volume" | "biggest_event_daily_pct";
   limit: number;
 };
 
@@ -27,6 +31,8 @@ type ScanResult = {
   price_drop_pct: number;
   event_volume: number;
   still_low: boolean;
+  daily_volume_24h?: number | null;
+  event_daily_pct?: number | null;
 };
 
 type ScanResponse = {
@@ -48,7 +54,9 @@ export function App() {
     volume_mode: "relative_to_baseline",
     min_event_volume: 0,
     volume_multiplier: 3,
+    min_event_daily_pct: 0.1,
     still_low_pct: 0.05,
+    sort_by: "biggest_drop",
     limit: 50,
   });
   const [loading, setLoading] = useState(false);
@@ -157,6 +165,20 @@ export function App() {
         </label>
 
         <label>
+          Sort by
+          <select
+            value={req.sort_by}
+            onChange={(e) => setReq({ ...req, sort_by: e.target.value as ScanRequest["sort_by"] })}
+            style={{ width: "100%" }}
+          >
+            <option value="biggest_drop">Biggest dip</option>
+            <option value="biggest_event_daily_pct">Biggest event as % of daily vol</option>
+            <option value="biggest_volume">Biggest event volume</option>
+            <option value="most_recent">Most recent dump</option>
+          </select>
+        </label>
+
+        <label>
           Min buy limit (optional)
           <input
             type="number"
@@ -213,6 +235,7 @@ export function App() {
           >
             <option value="relative_to_baseline">Relative to baseline</option>
             <option value="absolute">Absolute</option>
+            <option value="daily_pct">Event as % of daily volume</option>
           </select>
         </label>
 
@@ -224,6 +247,19 @@ export function App() {
               value={req.min_event_volume}
               min={0}
               onChange={(e) => setReq({ ...req, min_event_volume: Number(e.target.value) })}
+              style={{ width: "100%" }}
+            />
+          </label>
+        ) : req.volume_mode === "daily_pct" ? (
+          <label>
+            Min event daily pct (0.10 = 10%)
+            <input
+              type="number"
+              step="0.01"
+              value={req.min_event_daily_pct}
+              min={0}
+              max={1}
+              onChange={(e) => setReq({ ...req, min_event_daily_pct: Number(e.target.value) })}
               style={{ width: "100%" }}
             />
           </label>
@@ -240,6 +276,32 @@ export function App() {
             />
           </label>
         )}
+
+        <label>
+          Min daily volume (24h, optional)
+          <input
+            type="number"
+            value={req.min_daily_volume_24h ?? ""}
+            min={0}
+            onChange={(e) =>
+              setReq({ ...req, min_daily_volume_24h: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
+            style={{ width: "100%" }}
+          />
+        </label>
+
+        <label>
+          Max daily volume (24h, optional)
+          <input
+            type="number"
+            value={req.max_daily_volume_24h ?? ""}
+            min={0}
+            onChange={(e) =>
+              setReq({ ...req, max_daily_volume_24h: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
+            style={{ width: "100%" }}
+          />
+        </label>
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 16 }}>
@@ -262,6 +324,8 @@ export function App() {
                 <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Item</th>
                 <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Drop %</th>
                 <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Event vol</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Event % daily</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Daily vol (24h)</th>
                 <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Baseline</th>
                 <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Event</th>
                 <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Still low</th>
@@ -277,6 +341,12 @@ export function App() {
                     {(r.price_drop_pct * 100).toFixed(2)}%
                   </td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.event_volume}</td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.event_daily_pct == null ? "-" : `${(r.event_daily_pct * 100).toFixed(2)}%`}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.daily_volume_24h == null ? "-" : r.daily_volume_24h}
+                  </td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.baseline_price.toFixed(1)}</td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.event_price.toFixed(1)}</td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>{r.still_low ? "yes" : "no"}</td>

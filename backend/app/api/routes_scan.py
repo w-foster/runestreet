@@ -25,6 +25,8 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)) -> ScanResponse:
     now = floor_to_5m(int(time.time()))
     # We need baseline window plus event+still-low windows plus a small buffer.
     blocks = req.baseline_hours * 12 + req.event_window_blocks + req.still_low_blocks + 4
+    # Daily volume metrics need a full 24h window ending now (288 buckets).
+    blocks = max(blocks, 288 + 8)
     bucket_ts_list = [now - 300 * i for i in range(blocks)]
 
     client = OsrsPricesClient()
@@ -88,6 +90,8 @@ async def scan(req: ScanRequest, db: Session = Depends(get_db)) -> ScanResponse:
         results.sort(key=lambda r: r.dump_bucket_ts, reverse=True)
     elif req.sort_by == "biggest_volume":
         results.sort(key=lambda r: r.event_volume, reverse=True)
+    elif req.sort_by == "biggest_event_daily_pct":
+        results.sort(key=lambda r: (r.event_daily_pct or -1.0), reverse=True)
     else:
         results.sort(key=lambda r: r.price_drop_pct)  # more negative first
 

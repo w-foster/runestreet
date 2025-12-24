@@ -19,6 +19,7 @@ class EventPriceMode(str, Enum):
 class VolumeMode(str, Enum):
     absolute = "absolute"
     relative_to_baseline = "relative_to_baseline"
+    daily_pct = "daily_pct"
 
 
 class ScanRequest(BaseModel):
@@ -34,6 +35,7 @@ class ScanRequest(BaseModel):
     volume_mode: VolumeMode = VolumeMode.relative_to_baseline
     min_event_volume: int = Field(0, ge=0)
     volume_multiplier: float = Field(3.0, ge=0.0)
+    min_event_daily_pct: float = Field(0.10, ge=0.0, le=1.0)
 
     still_low_pct: float = Field(0.05, ge=0.0, le=0.95)
 
@@ -48,9 +50,11 @@ class ScanRequest(BaseModel):
     max_buy_limit: int | None = Field(default=None, ge=0)
     min_price: int | None = Field(default=None, ge=0)
     max_price: int | None = Field(default=None, ge=0)
+    min_daily_volume_24h: int | None = Field(default=None, ge=0)
+    max_daily_volume_24h: int | None = Field(default=None, ge=0)
 
     # Behavior
-    sort_by: Literal["biggest_drop", "most_recent", "biggest_volume"] = "biggest_drop"
+    sort_by: Literal["biggest_drop", "most_recent", "biggest_volume", "biggest_event_daily_pct"] = "biggest_drop"
     limit: int = Field(100, ge=1, le=500)
 
 
@@ -65,6 +69,8 @@ class ScanResult(BaseModel):
 
     event_volume: int
     baseline_mean_5m_volume: float | None = None
+    daily_volume_24h: int | None = None
+    event_daily_pct: float | None = None
 
     still_low: bool
     latest_price: float | None = None
