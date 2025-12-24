@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { Sparkline } from "../components/Sparkline";
 
 type VolumeMode = "absolute" | "relative_to_baseline" | "daily_pct";
 
@@ -332,8 +333,8 @@ export function App() {
               </tr>
             </thead>
             <tbody>
-              {data.results.map((r) => (
-                <tr key={`${r.item_id}:${r.dump_bucket_ts}`}>
+              {data.results.flatMap((r) => [
+                <tr key={`${r.item_id}:${r.dump_bucket_ts}:main`}>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>
                     {r.name} <span style={{ color: "#888" }}>({r.item_id})</span>
                   </td>
@@ -347,11 +348,21 @@ export function App() {
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
                     {r.daily_volume_24h == null ? "-" : r.daily_volume_24h}
                   </td>
-                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.baseline_price.toFixed(1)}</td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.baseline_price.toFixed(1)}
+                  </td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.event_price.toFixed(1)}</td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>{r.still_low ? "yes" : "no"}</td>
-                </tr>
-              ))}
+                </tr>,
+                <tr key={`${r.item_id}:${r.dump_bucket_ts}:chart`}>
+                  <td colSpan={8} style={{ padding: "8px 8px 14px", borderBottom: "1px solid #f7f7f7" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ color: "#666", fontSize: 12, width: 120 }}>last 24h price</div>
+                      <Sparkline apiBaseUrl={apiBaseUrl()} itemId={r.item_id} hours={24} />
+                    </div>
+                  </td>
+                </tr>,
+              ])}
             </tbody>
           </table>
         )}
