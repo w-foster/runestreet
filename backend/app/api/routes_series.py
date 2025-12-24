@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,11 @@ class ItemSeriesResponse(BaseModel):
 
 
 @router.get("/items/{item_id}/series", response_model=ItemSeriesResponse)
-async def item_series(item_id: int, hours: int = Field(24, ge=1, le=48), db: Session = Depends(get_db)) -> ItemSeriesResponse:
+async def item_series(
+    item_id: int,
+    hours: int = Query(24, ge=1, le=48),
+    db: Session = Depends(get_db),
+) -> ItemSeriesResponse:
     """
     Return a fixed-step 5m series for the last `hours` hours ending at 'now', aligned to 5m boundaries.
     """
