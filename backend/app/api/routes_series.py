@@ -22,6 +22,7 @@ class ItemSeriesResponse(BaseModel):
     end_ts: int
     timestamps: list[int]
     avg_low: list[int | None]
+    avg_high: list[int | None]
 
 
 @router.get("/items/{item_id}/series", response_model=ItemSeriesResponse)
@@ -53,8 +54,16 @@ async def item_series(
     ).all()
     by_ts = {int(ts): (int(avg) if avg is not None else None) for ts, avg in rows}
 
+    rows_h = db.execute(
+        select(ItemBucket5m.bucket_ts, ItemBucket5m.avg_high)
+        .where(ItemBucket5m.item_id == item_id)
+        .where(ItemBucket5m.bucket_ts.in_(bucket_ts_list))
+    ).all()
+    by_ts_h = {int(ts): (int(avg) if avg is not None else None) for ts, avg in rows_h}
+
     timestamps = bucket_ts_list
     avg_low = [by_ts.get(ts) for ts in bucket_ts_list]
+    avg_high = [by_ts_h.get(ts) for ts in bucket_ts_list]
 
     return ItemSeriesResponse(
         item_id=item_id,
@@ -62,6 +71,7 @@ async def item_series(
         end_ts=end_ts,
         timestamps=timestamps,
         avg_low=avg_low,
+        avg_high=avg_high,
     )
 
 

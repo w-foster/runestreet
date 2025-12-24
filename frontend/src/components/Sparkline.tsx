@@ -7,17 +7,25 @@ type SeriesResponse = {
   end_ts: number;
   timestamps: number[];
   avg_low: Array<number | null>;
+  avg_high: Array<number | null>;
 };
 
-function toPoints(values: Array<number | null>, width: number, height: number): string | null {
+function minMax(values: Array<number | null>): { min: number; max: number } | null {
   const finite: number[] = [];
   for (const v of values) if (v != null && Number.isFinite(v)) finite.push(v);
   if (finite.length < 2) return null;
-  const min = Math.min(...finite);
-  const max = Math.max(...finite);
+  return { min: Math.min(...finite), max: Math.max(...finite) };
+}
+
+function toPointsScaled(
+  values: Array<number | null>,
+  width: number,
+  height: number,
+  min: number,
+  max: number,
+): string | null {
   const span = Math.max(1, max - min);
 
-  // Map indices to x; missing values are skipped (line breaks).
   const pts: string[] = [];
   const n = values.length;
   for (let i = 0; i < n; i++) {
@@ -63,7 +71,20 @@ export function Sparkline({
 
   const width = 280;
   const height = 44;
-  const points = useMemo(() => (data ? toPoints(data.avg_low, width, height) : null), [data]);
+  const points = useMemo(() => {
+    if (!data) return { low: null as string | null, high: null as string | null };
+    const mmLow = minMax(data.avg_low);
+    const mmHigh = minMax(data.avg_high);
+    const mins = [mmLow?.min, mmHigh?.min].filter((x): x is number => typeof x === "number");
+    const maxs = [mmLow?.max, mmHigh?.max].filter((x): x is number => typeof x === "number");
+    if (mins.length === 0 || maxs.length === 0) return { low: null, high: null };
+    const min = Math.min(...mins);
+    const max = Math.max(...maxs);
+    return {
+      low: toPointsScaled(data.avg_low, width, height, min, max),
+      high: toPointsScaled(data.avg_high, width, height, min, max),
+    };
+  }, [data]);
 
   if (err) return <div style={{ color: "crimson", fontSize: 12 }}>chart error: {err}</div>;
   if (!data) return <div style={{ color: "#777", fontSize: 12 }}>loading chart…</div>;
@@ -71,7 +92,8 @@ export function Sparkline({
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="24h price sparkline">
       <rect x="0" y="0" width={width} height={height} fill="transparent" stroke="#eee" />
-      {points ? <polyline points={points} fill="none" stroke="#7c3aed" strokeWidth="1.5" /> : null}
+      {points.low ? <polyline points={points.low} fill="none" stroke="#16a34a" strokeWidth="1.5" /> : null}
+      {points.high ? <polyline points={points.high} fill="none" stroke="#c2410c" strokeWidth="1.5" /> : null}
     </svg>
   );
 }
