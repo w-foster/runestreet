@@ -47,6 +47,8 @@ function apiBaseUrl(): string {
 }
 
 export function App() {
+  const [tab, setTab] = useState<"dump" | "spreads">("dump");
+
   const [req, setReq] = useState<ScanRequest>({
     baseline_hours: 6,
     event_window_blocks: 1,
@@ -93,6 +95,32 @@ export function App() {
       <p style={{ marginTop: 8, color: "#555" }}>
         Configure filters, click Run, and the backend will ingest missing 5m buckets + scan cached data.
       </p>
+
+      <div style={{ display: "flex", gap: 8, margin: "12px 0 18px" }}>
+        <button
+          onClick={() => setTab("dump")}
+          style={{
+            padding: "8px 12px",
+            border: "1px solid #ddd",
+            background: tab === "dump" ? "#f5f3ff" : "white",
+          }}
+        >
+          Dump detector
+        </button>
+        <button
+          onClick={() => setTab("spreads")}
+          style={{
+            padding: "8px 12px",
+            border: "1px solid #ddd",
+            background: tab === "spreads" ? "#f5f3ff" : "white",
+          }}
+        >
+          Spreads detector
+        </button>
+      </div>
+
+      {tab === "spreads" ? <SpreadsTab /> : null}
+      {tab === "dump" ? (
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
         <label>
@@ -363,6 +391,238 @@ export function App() {
                   </td>
                 </tr>,
               ])}
+            </tbody>
+          </table>
+        )}
+      </div>
+      ) : null}
+    </div>
+  );
+}
+
+type SpreadsRequest = {
+  min_daily_volume_24h?: number;
+  max_daily_volume_24h?: number;
+  min_avg_price?: number;
+  max_avg_price?: number;
+  min_buy_limit?: number;
+  sort_by: "score" | "spread_pct" | "spread_abs" | "stability_1y";
+  stability_top_k: number;
+  limit: number;
+};
+
+type SpreadsResult = {
+  item_id: number;
+  name: string;
+  buy_limit?: number | null;
+  daily_volume_24h: number;
+  daily_mid_price?: number | null;
+  spread_abs_median?: number | null;
+  spread_pct_median?: number | null;
+  stability_cv_1d?: number | null;
+  stability_cv_7d?: number | null;
+  stability_cv_30d?: number | null;
+  stability_cv_1y?: number | null;
+  score: number;
+};
+
+type SpreadsResponse = {
+  results: SpreadsResult[];
+  meta: Record<string, unknown>;
+};
+
+function SpreadsTab() {
+  const [req, setReq] = useState<SpreadsRequest>({
+    sort_by: "score",
+    stability_top_k: 150,
+    limit: 50,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<SpreadsResponse | null>(null);
+
+  const endpoint = useMemo(() => `${apiBaseUrl()}/api/spreads/scan`, []);
+
+  async function run() {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      setData((await resp.json()) as SpreadsResponse);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ border: "1px solid #eee", padding: 14, borderRadius: 8, marginBottom: 16 }}>
+      <h2 style={{ margin: "0 0 8px" }}>Spreads detector</h2>
+      <p style={{ marginTop: 0, color: "#555" }}>
+        Finds items with a consistently realisable spread today, then rewards stability over 7/30/365 days (daily points).
+      </p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+        <label>
+          Min daily vol (24h)
+          <input
+            type="number"
+            value={req.min_daily_volume_24h ?? ""}
+            min={0}
+            onChange={(e) =>
+              setReq({ ...req, min_daily_volume_24h: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
+            style={{ width: "100%" }}
+          />
+        </label>
+        <label>
+          Max daily vol (24h)
+          <input
+            type="number"
+            value={req.max_daily_volume_24h ?? ""}
+            min={0}
+            onChange={(e) =>
+              setReq({ ...req, max_daily_volume_24h: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
+            style={{ width: "100%" }}
+          />
+        </label>
+        <label>
+          Min buy limit
+          <input
+            type="number"
+            value={req.min_buy_limit ?? ""}
+            min={0}
+            onChange={(e) => setReq({ ...req, min_buy_limit: e.target.value === "" ? undefined : Number(e.target.value) })}
+            style={{ width: "100%" }}
+          />
+        </label>
+
+        <label>
+          Min avg price
+          <input
+            type="number"
+            value={req.min_avg_price ?? ""}
+            min={0}
+            onChange={(e) => setReq({ ...req, min_avg_price: e.target.value === "" ? undefined : Number(e.target.value) })}
+            style={{ width: "100%" }}
+          />
+        </label>
+        <label>
+          Max avg price
+          <input
+            type="number"
+            value={req.max_avg_price ?? ""}
+            min={0}
+            onChange={(e) => setReq({ ...req, max_avg_price: e.target.value === "" ? undefined : Number(e.target.value) })}
+            style={{ width: "100%" }}
+          />
+        </label>
+
+        <label>
+          Sort by
+          <select
+            value={req.sort_by}
+            onChange={(e) => setReq({ ...req, sort_by: e.target.value as SpreadsRequest["sort_by"] })}
+            style={{ width: "100%" }}
+          >
+            <option value="score">Score (spread + stability)</option>
+            <option value="spread_pct">Spread % (median)</option>
+            <option value="spread_abs">Spread gp (median)</option>
+            <option value="stability_1y">Most stable (1y)</option>
+          </select>
+        </label>
+
+        <label>
+          Stability shortlist size
+          <input
+            type="number"
+            value={req.stability_top_k}
+            min={10}
+            max={500}
+            onChange={(e) => setReq({ ...req, stability_top_k: Number(e.target.value) })}
+            style={{ width: "100%" }}
+          />
+        </label>
+
+        <label>
+          Result limit
+          <input
+            type="number"
+            value={req.limit}
+            min={1}
+            max={200}
+            onChange={(e) => setReq({ ...req, limit: Number(e.target.value) })}
+            style={{ width: "100%" }}
+          />
+        </label>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12 }}>
+        <button onClick={run} disabled={loading} style={{ padding: "8px 14px" }}>
+          {loading ? "Running..." : "Run"}
+        </button>
+        <code style={{ color: "#666" }}>{endpoint}</code>
+      </div>
+
+      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+
+      <div style={{ marginTop: 12 }}>
+        {!data ? (
+          <p style={{ color: "#666" }}>No results yet.</p>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Item</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Score</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Spread %</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Spread gp</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Daily vol</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>Avg price</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>CV 1d</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>CV 7d</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>CV 30d</th>
+                <th style={{ textAlign: "right", borderBottom: "1px solid #ddd", padding: 8 }}>CV 1y</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.results.map((r) => (
+                <tr key={r.item_id}>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>
+                    {r.name} <span style={{ color: "#888" }}>({r.item_id})</span>
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.score.toFixed(2)}</td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.spread_pct_median == null ? "-" : `${(r.spread_pct_median * 100).toFixed(2)}%`}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.spread_abs_median == null ? "-" : r.spread_abs_median.toFixed(0)}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.daily_volume_24h}</td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.daily_mid_price == null ? "-" : r.daily_mid_price.toFixed(0)}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.stability_cv_1d == null ? "-" : r.stability_cv_1d.toFixed(3)}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.stability_cv_7d == null ? "-" : r.stability_cv_7d.toFixed(3)}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.stability_cv_30d == null ? "-" : r.stability_cv_30d.toFixed(3)}
+                  </td>
+                  <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
+                    {r.stability_cv_1y == null ? "-" : r.stability_cv_1y.toFixed(3)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

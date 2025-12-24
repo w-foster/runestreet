@@ -40,3 +40,22 @@ class ItemBucket5m(Base):
     low_vol: Mapped[int] = mapped_column(Integer)
 
 
+class ItemTimeseries24hMeta(Base):
+    __tablename__ = "item_timeseries_24h_meta"
+
+    item_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fetched_at: Mapped[int] = mapped_column(BigInteger)
+
+
+class ItemTimeseries24h(Base):
+    __tablename__ = "item_timeseries_24h"
+
+    item_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bucket_ts: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    avg_high: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    high_vol: Mapped[int] = mapped_column(Integer)
+    avg_low: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    low_vol: Mapped[int] = mapped_column(Integer)
+
+

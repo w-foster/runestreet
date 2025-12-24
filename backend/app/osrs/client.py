@@ -55,4 +55,19 @@ class OsrsPricesClient:
             raise OsrsApiError("5m response missing data field")
         return data
 
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(4),
+        wait=wait_exponential_jitter(initial=0.5, max=8.0),
+        retry=retry_if_exception_type((httpx.TimeoutException, httpx.NetworkError, OsrsApiError)),
+    )
+    async def get_timeseries(self, item_id: int, timestep: str) -> dict[str, Any]:
+        resp = await self._client.get("/timeseries", params={"id": item_id, "timestep": timestep})
+        if resp.status_code != 200:
+            raise OsrsApiError(f"timeseries failed: HTTP {resp.status_code}: {resp.text[:200]}")
+        data = resp.json()
+        if not isinstance(data, dict) or "data" not in data:
+            raise OsrsApiError("timeseries response missing data field")
+        return data
+
 
