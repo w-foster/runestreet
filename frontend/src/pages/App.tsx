@@ -41,6 +41,37 @@ type ScanResponse = {
   meta: Record<string, unknown>;
 };
 
+type SpreadsRequest = {
+  min_daily_volume_24h?: number;
+  max_daily_volume_24h?: number;
+  min_avg_price?: number;
+  max_avg_price?: number;
+  min_buy_limit?: number;
+  sort_by: "score" | "spread_pct" | "spread_abs" | "stability_1y";
+  stability_top_k: number;
+  limit: number;
+};
+
+type SpreadsResult = {
+  item_id: number;
+  name: string;
+  buy_limit?: number | null;
+  daily_volume_24h: number;
+  daily_mid_price?: number | null;
+  spread_abs_median?: number | null;
+  spread_pct_median?: number | null;
+  stability_cv_1d?: number | null;
+  stability_cv_7d?: number | null;
+  stability_cv_30d?: number | null;
+  stability_cv_1y?: number | null;
+  score: number;
+};
+
+type SpreadsResponse = {
+  results: SpreadsResult[];
+  meta: Record<string, unknown>;
+};
+
 function apiBaseUrl(): string {
   const v = import.meta.env.VITE_API_BASE_URL as string | undefined;
   return v ?? "http://localhost:8000";
@@ -48,53 +79,12 @@ function apiBaseUrl(): string {
 
 export function App() {
   const [tab, setTab] = useState<"dump" | "spreads">("dump");
-
-  const [req, setReq] = useState<ScanRequest>({
-    baseline_hours: 6,
-    event_window_blocks: 1,
-    still_low_blocks: 3,
-    min_drop_pct: 0.07,
-    volume_mode: "relative_to_baseline",
-    min_event_volume: 0,
-    volume_multiplier: 3,
-    min_event_daily_pct: 0.1,
-    still_low_pct: 0.05,
-    sort_by: "biggest_drop",
-    limit: 50,
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ScanResponse | null>(null);
-
-  const endpoint = useMemo(() => `${apiBaseUrl()}/api/scan`, []);
-
-  async function runScan() {
-    setLoading(true);
-    setError(null);
-    try {
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req),
-      });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const json = (await resp.json()) as ScanResponse;
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }
+  const base = apiBaseUrl();
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", padding: 20, maxWidth: 1100, margin: "0 auto" }}>
-      <h1 style={{ margin: 0 }}>Runestreet — Dump Detector</h1>
-      <p style={{ marginTop: 8, color: "#555" }}>
-        Configure filters, click Run, and the backend will ingest missing 5m buckets + scan cached data.
-      </p>
+      <h1 style={{ margin: 0 }}>Runestreet</h1>
+      <p style={{ marginTop: 8, color: "#555" }}>OSRS scanning tools (on-demand, cached in Postgres).</p>
 
       <div style={{ display: "flex", gap: 8, margin: "12px 0 18px" }}>
         <button
@@ -119,8 +109,55 @@ export function App() {
         </button>
       </div>
 
-      {tab === "spreads" ? <SpreadsTab /> : null}
-      {tab === "dump" ? (
+      {tab === "dump" ? <DumpTab apiBase={base} /> : <SpreadsTab apiBase={base} />}
+    </div>
+  );
+}
+
+function DumpTab({ apiBase }: { apiBase: string }) {
+  const [req, setReq] = useState<ScanRequest>({
+    baseline_hours: 6,
+    event_window_blocks: 1,
+    still_low_blocks: 3,
+    min_drop_pct: 0.07,
+    volume_mode: "relative_to_baseline",
+    min_event_volume: 0,
+    volume_multiplier: 3,
+    min_event_daily_pct: 0.1,
+    still_low_pct: 0.05,
+    sort_by: "biggest_drop",
+    limit: 50,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<ScanResponse | null>(null);
+
+  const endpoint = useMemo(() => `${apiBase}/api/scan`, [apiBase]);
+
+  async function runScan() {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      setData((await resp.json()) as ScanResponse);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 8px" }}>Dump detector</h2>
+      <p style={{ marginTop: 0, color: "#555" }}>
+        Configure filters, click Run, and the backend will ingest missing 5m buckets + scan cached data.
+      </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
         <label>
@@ -343,7 +380,7 @@ export function App() {
       {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
 
       <div style={{ marginTop: 16 }}>
-        <h2 style={{ marginBottom: 8 }}>Results</h2>
+        <h3 style={{ marginBottom: 8 }}>Results</h3>
         {!data ? (
           <p style={{ color: "#666" }}>No results yet.</p>
         ) : (
@@ -386,7 +423,7 @@ export function App() {
                   <td colSpan={8} style={{ padding: "8px 8px 14px", borderBottom: "1px solid #f7f7f7" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ color: "#666", fontSize: 12, width: 120 }}>last 24h price</div>
-                      <Sparkline apiBaseUrl={apiBaseUrl()} itemId={r.item_id} hours={24} />
+                      <Sparkline apiBaseUrl={apiBase} itemId={r.item_id} hours={24} />
                     </div>
                   </td>
                 </tr>,
@@ -395,43 +432,11 @@ export function App() {
           </table>
         )}
       </div>
-      ) : null}
     </div>
   );
 }
 
-type SpreadsRequest = {
-  min_daily_volume_24h?: number;
-  max_daily_volume_24h?: number;
-  min_avg_price?: number;
-  max_avg_price?: number;
-  min_buy_limit?: number;
-  sort_by: "score" | "spread_pct" | "spread_abs" | "stability_1y";
-  stability_top_k: number;
-  limit: number;
-};
-
-type SpreadsResult = {
-  item_id: number;
-  name: string;
-  buy_limit?: number | null;
-  daily_volume_24h: number;
-  daily_mid_price?: number | null;
-  spread_abs_median?: number | null;
-  spread_pct_median?: number | null;
-  stability_cv_1d?: number | null;
-  stability_cv_7d?: number | null;
-  stability_cv_30d?: number | null;
-  stability_cv_1y?: number | null;
-  score: number;
-};
-
-type SpreadsResponse = {
-  results: SpreadsResult[];
-  meta: Record<string, unknown>;
-};
-
-function SpreadsTab() {
+function SpreadsTab({ apiBase }: { apiBase: string }) {
   const [req, setReq] = useState<SpreadsRequest>({
     sort_by: "score",
     stability_top_k: 150,
@@ -441,7 +446,7 @@ function SpreadsTab() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<SpreadsResponse | null>(null);
 
-  const endpoint = useMemo(() => `${apiBaseUrl()}/api/spreads/scan`, []);
+  const endpoint = useMemo(() => `${apiBase}/api/spreads/scan`, [apiBase]);
 
   async function run() {
     setLoading(true);
@@ -462,7 +467,7 @@ function SpreadsTab() {
   }
 
   return (
-    <div style={{ border: "1px solid #eee", padding: 14, borderRadius: 8, marginBottom: 16 }}>
+    <div style={{ border: "1px solid #eee", padding: 14, borderRadius: 8 }}>
       <h2 style={{ margin: "0 0 8px" }}>Spreads detector</h2>
       <p style={{ marginTop: 0, color: "#555" }}>
         Finds items with a consistently realisable spread today, then rewards stability over 7/30/365 days (daily points).
@@ -499,7 +504,9 @@ function SpreadsTab() {
             type="number"
             value={req.min_buy_limit ?? ""}
             min={0}
-            onChange={(e) => setReq({ ...req, min_buy_limit: e.target.value === "" ? undefined : Number(e.target.value) })}
+            onChange={(e) =>
+              setReq({ ...req, min_buy_limit: e.target.value === "" ? undefined : Number(e.target.value) })
+            }
             style={{ width: "100%" }}
           />
         </label>
