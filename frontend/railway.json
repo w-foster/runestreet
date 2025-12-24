@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm ci && npm run build",
+  "startCommand": "node_modules/.bin/serve -s dist -l $PORT"
+}
+
+
