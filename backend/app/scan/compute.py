@@ -94,21 +94,32 @@ def scan_item_series(
             if event_volume < baseline_mean_5m_vol * req.volume_multiplier:
                 continue
 
-        # still-low check
-        still_low = True
-        if S > 0:
-            threshold = baseline_price * (1 - req.still_low_pct)
-            post_prices = avg_low[post_slice]
-            post_valid = post_prices[np.isfinite(post_prices)]
-            if post_valid.size < req.min_valid_still_low_price_points:
-                still_low = False
-            else:
-                still_low = bool(np.all(post_valid <= threshold))
+        # still-low *NOW* check:
+        # require the latest known price (and optionally the last S buckets ending now)
+        # to still be below the threshold derived from the pre-dump baseline.
+        threshold = baseline_price * (1 - req.still_low_pct)
+
+        # Must have at least one bucket after the dump window to call it "still low afterwards".
+        if t + M >= n:
+            continue
+
+        s_eff = max(S, 1)
+        tail_start = max(t + M, n - s_eff)
+        tail_prices = avg_low[slice(tail_start, n)]
+        tail_valid = tail_prices[np.isfinite(tail_prices)]
+
+        if tail_valid.size < req.min_valid_still_low_price_points:
+            continue
+        if not bool(np.all(tail_valid <= threshold)):
+            continue
 
         if not still_low:
             continue
 
         dump_bucket_ts = int(bucket_ts[t])
+
+        latest_valid = avg_low[np.isfinite(avg_low)]
+        latest_price = float(latest_valid[-1]) if latest_valid.size else None
 
         cand = ScanResult(
             item_id=item_id,
@@ -120,7 +131,7 @@ def scan_item_series(
             event_volume=event_volume,
             baseline_mean_5m_volume=None if not np.isfinite(baseline_mean_5m_vol) else float(baseline_mean_5m_vol),
             still_low=True,
-            latest_price=None,
+            latest_price=latest_price,
         )
 
         if best is None:
