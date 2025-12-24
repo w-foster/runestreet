@@ -401,7 +401,15 @@ function DumpTab({ apiBase }: { apiBase: string }) {
               {data.results.flatMap((r) => [
                 <tr key={`${r.item_id}:${r.dump_bucket_ts}:main`}>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>
-                    {r.name} <span style={{ color: "#888" }}>({r.item_id})</span>
+                    <a
+                      href={`https://prices.runescape.wiki/osrs/item/${r.item_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#111", textDecoration: "underline" }}
+                    >
+                      {r.name}
+                    </a>{" "}
+                    <span style={{ color: "#888" }}>({r.item_id})</span>
                   </td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
                     {(r.price_drop_pct * 100).toFixed(2)}%
@@ -605,10 +613,18 @@ function SpreadsTab({ apiBase }: { apiBase: string }) {
               </tr>
             </thead>
             <tbody>
-              {data.results.map((r) => (
-                <tr key={r.item_id}>
+              {data.results.flatMap((r) => [
+                <tr key={`${r.item_id}:main`}>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0" }}>
-                    {r.name} <span style={{ color: "#888" }}>({r.item_id})</span>
+                    <a
+                      href={`https://prices.runescape.wiki/osrs/item/${r.item_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#111", textDecoration: "underline" }}
+                    >
+                      {r.name}
+                    </a>{" "}
+                    <span style={{ color: "#888" }}>({r.item_id})</span>
                   </td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>{r.score.toFixed(2)}</td>
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
@@ -633,8 +649,26 @@ function SpreadsTab({ apiBase }: { apiBase: string }) {
                   <td style={{ padding: 8, borderBottom: "1px solid #f0f0f0", textAlign: "right" }}>
                     {r.stability_cv_1y == null ? "-" : r.stability_cv_1y.toFixed(3)}
                   </td>
-                </tr>
-              ))}
+                </tr>,
+                <tr key={`${r.item_id}:chart`}>
+                  <td colSpan={10} style={{ padding: "8px 8px 14px", borderBottom: "1px solid #f7f7f7" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ color: "#666", fontSize: 12, width: 120 }}>last 24h price</div>
+                      <Sparkline apiBaseUrl={apiBase} itemId={r.item_id} hours={24} />
+                    </div>
+                    <div style={{ display: "flex", gap: 12, marginLeft: 120, marginTop: 6, fontSize: 12, color: "#666" }}>
+                      <span>
+                        <span style={{ display: "inline-block", width: 10, height: 10, background: "#16a34a", marginRight: 6 }} />
+                        low
+                      </span>
+                      <span>
+                        <span style={{ display: "inline-block", width: 10, height: 10, background: "#c2410c", marginRight: 6 }} />
+                        high
+                      </span>
+                    </div>
+                  </td>
+                </tr>,
+              ])}
             </tbody>
           </table>
         )}
