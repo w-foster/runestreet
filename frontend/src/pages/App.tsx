@@ -438,6 +438,11 @@ function DumpTab({ apiBase }: { apiBase: string }) {
 
 function SpreadsTab({ apiBase }: { apiBase: string }) {
   const [req, setReq] = useState<SpreadsRequest>({
+    min_daily_volume_24h: 50_000,
+    max_daily_volume_24h: 500_000,
+    min_avg_price: 100,
+    max_avg_price: 3_000,
+    min_buy_limit: 5_000,
     sort_by: "score",
     stability_top_k: 150,
     limit: 50,
