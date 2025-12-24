@@ -37,6 +37,12 @@ class ScanRequest(BaseModel):
 
     still_low_pct: float = Field(0.05, ge=0.0, le=0.95)
 
+    # Robustness against sparse trading (avgLowPrice can be null for many buckets).
+    # These thresholds are counts of buckets WITH a finite avgLowPrice.
+    min_valid_baseline_price_points: int = Field(12, ge=0)
+    min_valid_event_price_points: int = Field(1, ge=0)
+    min_valid_still_low_price_points: int = Field(1, ge=0)
+
     # Optional item filters
     min_buy_limit: int | None = Field(default=None, ge=0)
     max_buy_limit: int | None = Field(default=None, ge=0)

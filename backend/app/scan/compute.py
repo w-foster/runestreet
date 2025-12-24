@@ -8,17 +8,23 @@ from app.scan.schemas import BaselineStat, EventPriceMode, ScanRequest, ScanResu
 def _baseline_stat(arr: np.ndarray, stat: BaselineStat) -> float:
     if arr.size == 0:
         return float("nan")
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return float("nan")
     if stat == BaselineStat.mean:
-        return float(np.nanmean(arr))
-    return float(np.nanmedian(arr))
+        return float(np.mean(arr))
+    return float(np.median(arr))
 
 
 def _event_price(arr: np.ndarray, mode: EventPriceMode) -> float:
     if arr.size == 0:
         return float("nan")
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return float("nan")
     if mode == EventPriceMode.mean:
-        return float(np.nanmean(arr))
-    return float(np.nanmin(arr))
+        return float(np.mean(arr))
+    return float(np.min(arr))
 
 
 def scan_item_series(
@@ -56,11 +62,17 @@ def scan_item_series(
         event_prices = avg_low[event_slice]
         event_vols = low_vol[event_slice]
 
-        baseline_price = _baseline_stat(base_prices, req.baseline_stat)
+        base_valid = base_prices[np.isfinite(base_prices)]
+        if base_valid.size < req.min_valid_baseline_price_points:
+            continue
+        baseline_price = _baseline_stat(base_valid, req.baseline_stat)
         if not np.isfinite(baseline_price) or baseline_price <= 0:
             continue
 
-        event_price = _event_price(event_prices, req.event_price_mode)
+        event_valid = event_prices[np.isfinite(event_prices)]
+        if event_valid.size < req.min_valid_event_price_points:
+            continue
+        event_price = _event_price(event_valid, req.event_price_mode)
         if not np.isfinite(event_price) or event_price <= 0:
             continue
 
@@ -87,7 +99,11 @@ def scan_item_series(
         if S > 0:
             threshold = baseline_price * (1 - req.still_low_pct)
             post_prices = avg_low[post_slice]
-            still_low = bool(np.all(post_prices <= threshold))
+            post_valid = post_prices[np.isfinite(post_prices)]
+            if post_valid.size < req.min_valid_still_low_price_points:
+                still_low = False
+            else:
+                still_low = bool(np.all(post_valid <= threshold))
 
         if not still_low:
             continue
